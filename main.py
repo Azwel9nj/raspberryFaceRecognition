@@ -1,36 +1,125 @@
-import sys
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[1]:
+
 import os
-from time import strftime, gmtime
+from object_detection.utils import label_map_util
+from object_detection.utils import visualization_utils as viz_utils
+from object_detection.builders import model_builder
 import threading
-from time import sleep
-from PyQt6.QtGui import QGuiApplication
-from PyQt6.QtQml import QQmlApplicationEngine
-from PyQt6.QtQuick import QQuickWindow
-from PyQt6.QtCore import QObject, pyqtSignal
+import tensorflow as tf
+from object_detection.utils import config_util
+import cv2 
+import numpy as np
+import uuid
+import time
+from flask import Flask
+import os
 
-class Backend(QObject):
+WORKSPACE_PATH = 'Tensorflow/workspace'
+SCRIPTS_PATH = 'Tensorflow/scripts'
+APIMODEL_PATH = 'Tensorflow/models'
+ANNOTATION_PATH = 'annotations'
+IMAGE_PATH = WORKSPACE_PATH+'/images'
+MODEL_PATH = WORKSPACE_PATH+'/models'
+PRETRAINED_MODEL_PATH = WORKSPACE_PATH+'/pre-trained-models'
+CONFIG_PATH = 'Model/pipeline.config'
+CHECKPOINT_PATH = 'Model/'
+IMAGES_PATH = os.path.join('collectedimages')
+category_index = label_map_util.create_category_index_from_labelmap(ANNOTATION_PATH+'/label_map.pbtxt')
+label = ['allCapturedImages']
 
-    def __init__(self):
-        QObject.__init__(self)
-    updated = pyqtSignal(str, arguments=['updater'])
-    def updater(self, curr_time):
-        self.updated.emit(curr_time)
-    def bootUp(self):
-        t_thread = threading.Thread(target=self._bootUp)
-        t_thread.daemon = True
-        t_thread.start()
-    def _bootUp(self):
-        while True:
-            curr_time = strftime("%H:%M:%S", gmtime())
-            self.updater(curr_time)
-            sleep(0.1)
+# Load pipeline config and build a detection model
+configs = config_util.get_configs_from_pipeline_file(CONFIG_PATH)
+detection_model = model_builder.build(model_config=configs['model'], is_training=False)
 
-QQuickWindow.setSceneGraphBackend('software')
-app = QGuiApplication(sys.argv)
-engine = QQmlApplicationEngine()
-engine.quit.connect(app.quit)
-engine.load('./UI/main.qml')
-back_end = Backend()
-engine.rootObjects()[0].setProperty('backend', back_end)
-back_end.bootUp()
-sys.exit(app.exec())
+# Restore checkpoint
+ckpt = tf.compat.v2.train.Checkpoint(model=detection_model)
+ckpt.restore(os.path.join(CHECKPOINT_PATH, 'ckpt-101')).expect_partial()
+
+
+@tf.function
+def detect_fn(image):
+    image, shapes = detection_model.preprocess(image)
+    prediction_dict = detection_model.predict(image, shapes)
+    detections = detection_model.postprocess(prediction_dict, shapes)
+    return detections
+
+
+def takePicture():
+    label = ['allCapturedImages']
+    threading.Timer(1.0, takePicture()).start()
+    imgname = os.path.join(IMAGES_PATH,label,label+'.'+'{}.jpg'.format(str(uuid.uuid1())))
+    cv2.imwrite(imgname, frame)
+    #time.sleep(5) 
+
+# Setup capture
+cap = cv2.VideoCapture(0)
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+labels = ['allCapturedImages']
+
+"""
+if not os.path.exists(IMAGES_PATH):
+    if os.name == 'posix':
+        !mkdir -p {IMAGES_PATH}
+    if os.name == 'nt':
+         !mkdir {IMAGES_PATH}
+for label in labels:
+    path = os.path.join(IMAGES_PATH, label)
+    if not os.path.exists(path):
+        !mkdir {path}
+"""
+
+while True: 
+    ret, frame = cap.read()
+    image_np = np.array(frame)
+    
+    input_tensor = tf.convert_to_tensor(np.expand_dims(image_np, 0), dtype=tf.float32)
+    detections = detect_fn(input_tensor)
+    
+    num_detections = int(detections.pop('num_detections'))
+    detections = {key: value[0, :num_detections].numpy()
+                  for key, value in detections.items()}
+    detections['num_detections'] = num_detections
+
+    # detection_classes should be ints.
+    detections['detection_classes'] = detections['detection_classes'].astype(np.int64)
+    
+    label_id_offset = 1
+    image_np_with_detections = image_np.copy()
+
+    viz_utils.visualize_boxes_and_labels_on_image_array(
+                image_np_with_detections,
+                detections['detection_boxes'],
+                detections['detection_classes']+label_id_offset,
+                detections['detection_scores'],
+                category_index,
+                use_normalized_coordinates=True,
+                max_boxes_to_draw=5,
+                min_score_thresh=.5,
+                agnostic_mode=False)
+
+    cv2.imshow('facemask detection',  cv2.resize(image_np_with_detections, (800, 600)))
+    
+    number_imgs = 6
+    """for detections['detection_classes'] in detections:
+        imgname = os.path.join(IMAGES_PATH,detections['detection_classes'],detections['detection_classes']+'.'+'{}.jpg'.format(str(uuid.uuid1())))
+        cv2.imwrite(imgname, frame)
+        time.sleep(5)
+    """
+    #takePicture()
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        cap.release()
+        break
+    if cv2.getWindowProperty('facemask detection', cv2.WND_PROP_VISIBLE) <1:
+        break
+
+
+# In[ ]:
+
+
+
+
