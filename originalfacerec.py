@@ -410,12 +410,15 @@ def TakeImages():
 ########################################################################################
 #$$$$$$$$$$$$$
 def TrainImages():
+    name = (txt2.get())
+    parent_dir = "TrainingImage/"
+    #path = os.path.join(parent_dir, name)
     check_haarcascadefile()
     assure_path_exists("Pass_Train/")
     recognizer = cv2.face_LBPHFaceRecognizer.create()
     harcascadePath = "haarcascade_frontalface_default.xml"
     detector = cv2.CascadeClassifier(harcascadePath)
-    faces, ID = getImagesAndLabels("TrainingImage")
+    faces, ID = getImagesAndLabels(os.path.join(parent_dir, name))
     try:
         recognizer.train(faces, np.array(ID))
     except:
