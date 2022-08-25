@@ -322,10 +322,15 @@ def psw():
 
 #$$$$$$$$$$$$$
 def TakeImages():
+    name = (txt2.get())
     check_haarcascadefile()
     columns = ['SERIAL NO.', '', 'ID', '', 'NAME']
     assure_path_exists("StudentDetails/")
     assure_path_exists("TrainingImage/")
+    #Make name sub directory
+    parent_dir = "TrainingImage/"
+    path = os.path.join(parent_dir, name)
+    os.mkdir(path)
     ###Database Option Code
     """storeImage = im = open(img_name, 'rb').read()
     conn.execute("INSERT INTO images(name, img, createdOn) VALUES(?,?,?)",(img_name , sqlite3.Binary(storeImage),currentDateTime))
@@ -348,7 +353,7 @@ def TakeImages():
             serial = 1
         csvFile1.close()
     Id = (txt.get())
-    name = (txt2.get())
+    
     currentDateTime = datetime.datetime.now()
     conn.execute("INSERT INTO users(name, userId, createdOn) VALUES(?,?,?)",(name ,Id ,currentDateTime))
     if ((name.isalpha()) or (' ' in name)):
@@ -357,7 +362,7 @@ def TakeImages():
         detector = cv2.CascadeClassifier(harcascadePath)
         sampleNum = 0
         t_end = 1
-        while sampleNum  < 10:
+        while (True):
             ret, img = cam.read()
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             faces = detector.detectMultiScale(gray, 1.05, 5)
@@ -367,13 +372,13 @@ def TakeImages():
                 # incrementing sample number
                 sampleNum = sampleNum + 1
                 # saving the captured face in the dataset folder TrainingImage
-                cv2.imshow('Taking Images', img)
-                cv2.imwrite("TrainingImage/ " + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg",
+                
+                cv2.imwrite(os.path.join(path,name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg"),
                             gray[y:y + h, x:x + w])
-
+                cv2.imshow('Taking Images', img)
                 
                 #imgname = os.path.join(IMAGES_PATH,labels,labels+'.'+'{}.jpg'.format(str(uuid.uuid1())))
-                img_name = "TrainingImage/ " + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg"
+                img_name = os.path.join(path,name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg")
                 storeImage = im = open(img_name, 'rb').read()
                 
                 conn.execute("INSERT INTO images(imgname, img, userId, createdOn) VALUES(?,?,?,?)",(img_name , sqlite3.Binary(storeImage),Id,currentDateTime))
@@ -383,11 +388,11 @@ def TakeImages():
                 # display the frame
                 
             # wait for 100 miliseconds
-            """if cv2.waitKey(100) & 0xFF == ord('q'):
+            if cv2.waitKey(100) & 0xFF == ord('q'):
                 break
             # break if the sample number is morethan 100
-            elif sampleNum > 100:
-                break"""
+            elif sampleNum > 9:
+                break
             #t_end = t_end + 1
         cam.release()
         cv2.destroyAllWindows()
