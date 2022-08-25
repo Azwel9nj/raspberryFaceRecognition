@@ -14,6 +14,172 @@ import datetime
 import time
 import detect
 #import time
+# Copyright 2021 The TensorFlow Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Main script to run the object detection routine."""
+import argparse
+import sys
+import time
+
+import cv2
+from tflite_support.task import core
+from tflite_support.task import processor
+from tflite_support.task import vision
+import utils
+import numpy as np
+import originalfacerec
+
+
+def run(model: str, camera_id: int, width: int, height: int, num_threads: int,
+        enable_edgetpu: bool) -> None:
+  """Continuously run inference on images acquired from the camera.
+
+  Args:
+    model: Name of the TFLite object detection model.
+    camera_id: The camera id to be passed to OpenCV.
+    width: The width of the frame captured from the camera.
+    height: The height of the frame captured from the camera.
+    num_threads: The number of CPU threads to run the model.
+    enable_edgetpu: True/False whether the model is a EdgeTPU model.
+  """
+
+  # Variables to calculate FPS
+  counter, fps = 0, 0
+  start_time = time.time()
+
+  # Start capturing video input from the camera
+  cap = cv2.VideoCapture(camera_id)
+  cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+  cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+  # Visualization parameters
+  row_size = 20  # pixels
+  left_margin = 24  # pixels
+  text_color = (0, 0, 255)  # red
+  font_size = 1
+  font_thickness = 1
+  fps_avg_frame_count = 10
+
+  # Initialize the object detection model
+  base_options = core.BaseOptions(
+      file_name=model, use_coral=enable_edgetpu, num_threads=num_threads)
+  detection_options = processor.DetectionOptions(
+      max_results=3, score_threshold=0.3)
+  options = vision.ObjectDetectorOptions(
+      base_options=base_options, detection_options=detection_options)
+  detector = vision.ObjectDetector.create_from_options(options)
+
+  # Continuously capture images from the camera and run inference
+  while cap.isOpened():
+    success, image = cap.read()
+    if not success:
+      sys.exit(
+          'ERROR: Unable to read from webcam. Please verify your webcam settings.'
+      )
+
+    counter += 1
+    image = cv2.flip(image, 1)
+
+    # Convert the image from BGR to RGB as required by the TFLite model.
+    rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    # Create a TensorImage object from the RGB image.
+    input_tensor = vision.TensorImage.create_from_array(rgb_image)
+
+    # Run object detection estimation using the model.
+    detection_result = detector.detect(input_tensor)
+    #Num_of_detections = len(get_list(detection_result))
+    #print(detection_result.shape())
+    #print(detection_result)
+    #print(detection_result)
+    #Add a check if array is empty try catch
+    #foundDetection = ((detection_result.detections[0].classes[0].index))
+    try:
+      foundDetection = ((detection_result.detections[0].classes[0].index))
+    except:
+      foundDetection = 4
+
+    print(foundDetection)  
+    
+
+    if(foundDetection == 0):      
+      cap.release()
+      cv2.destroyAllWindows()
+      TrackImages()
+
+    # Draw keypoints and edges on input image
+    image = utils.visualize(image, detection_result)
+
+    # Calculate the FPS
+    if counter % fps_avg_frame_count == 0:
+      end_time = time.time()
+      fps = fps_avg_frame_count / (end_time - start_time)
+      start_time = time.time()
+
+    # Show the FPS
+    fps_text = 'FPS = {:.1f}'.format(fps)
+    text_location = (left_margin, row_size)
+    cv2.putText(image, fps_text, text_location, cv2.FONT_HERSHEY_PLAIN,
+                font_size, text_color, font_thickness)
+
+    # Stop the program if the ESC key is pressed.
+    if cv2.waitKey(1) == 27:
+      break
+    cv2.imshow('object_detector', image)
+
+  cap.release()
+  cv2.destroyAllWindows()
+
+#tflite mask detection
+def maskdetection():
+  parser = argparse.ArgumentParser(
+      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  parser.add_argument(
+      '--model',
+      help='Path of the object detection model.',
+      required=False,
+      default='android.tflite')
+  parser.add_argument(
+      '--cameraId', help='Id of camera.', required=False, type=int, default=0)
+  parser.add_argument(
+      '--frameWidth',
+      help='Width of frame to capture from camera.',
+      required=False,
+      type=int,
+      default=640)
+  parser.add_argument(
+      '--frameHeight',
+      help='Height of frame to capture from camera.',
+      required=False,
+      type=int,
+      default=480)
+  parser.add_argument(
+      '--numThreads',
+      help='Number of CPU threads to run the model.',
+      required=False,
+      type=int,
+      default=4)
+  parser.add_argument(
+      '--enableEdgeTPU',
+      help='Whether to run the model on EdgeTPU.',
+      action='store_true',
+      required=False,
+      default=False)
+  args = parser.parse_args()
+
+  run(args.model, int(args.cameraId), args.frameWidth, args.frameHeight,
+      int(args.numThreads), bool(args.enableEdgeTPU))
 
 
 
@@ -22,9 +188,11 @@ conn = sqlite3.connect("facemaskattendance.db")
 cursorObject = conn.cursor()
 # create a table
 try:
-    cursorObject.execute("CREATE TABLE attendance(ID INTEGER PRIMARY KEY AUTOINCREMENT,name string, img blob, createdOn TIMESTAMP)")
+    
     cursorObject.execute("CREATE TABLE users(ID INTEGER PRIMARY KEY AUTOINCREMENT,name string,userId integer, createdOn TIMESTAMP)")
     cursorObject.execute("CREATE TABLE images(ID INTEGER PRIMARY KEY AUTOINCREMENT,imgname string, userId INTEGER, img blob, createdOn TIMESTAMP,FOREIGN KEY (userId) REFERENCES users(userId))")
+    cursorObject.execute("CREATE TABLE attendance(ID INTEGER PRIMARY KEY AUTOINCREMENT, userId INTEGER, img blob, createdOn TIMESTAMP,FOREIGN KEY (userId) REFERENCES users(userId))")
+
     conn.commit()
 except:
     pass
@@ -38,7 +206,7 @@ def contact():
 
 #about
 def about():
-    mess._show(title="About",message="This Attendance System is designed by Meet Suvariya")
+    mess._show(title="About",message="This is a Facemask Recognition and Attendance System")
 
 #clearbutton
 def clear():
@@ -281,6 +449,8 @@ def TrackImages():
     check_haarcascadefile()
     assure_path_exists("Attendance/")
     assure_path_exists("StudentDetails/")
+    assure_path_exists("AttendanceImages/")
+    currentDateTime = datetime.datetime.now()
     for k in tb.get_children():
         tb.delete(k)
     msg = ''
@@ -325,8 +495,32 @@ def TrackImages():
                 bb = str(aa)
                 bb = bb[2:-2]
                 attendance = [str(ID), '', bb, '', str(date), '', str(timeStamp)]
+                ts = time.time()
+                date = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
+                exists = os.path.isfile("Attendance/Attendance_" + date + ".csv")
+                if exists:
+                    with open("Attendance/Attendance_" + date + ".csv", 'a+') as csvFile1:
+                        writer = csv.writer(csvFile1)
+                        writer.writerow(attendance)
+                    csvFile1.close()
+                else:
+                    with open("Attendance/Attendance_" + date + ".csv", 'a+') as csvFile1:
+                        writer = csv.writer(csvFile1)
+                        writer.writerow(col_names)
+                        writer.writerow(attendance)
+                    csvFile1.close()
+                with open("Attendance/Attendance_" + date + ".csv", 'r') as csvFile1:
+                    reader1 = csv.reader(csvFile1)
+                    for lines in reader1:
+                        i = i + 1
+                        if (i > 1):
+                            if (i % 2 != 0):
+                                iidd = str(lines[0]) + '   '
+                                tb.insert('', 0, text=iidd, values=(str(lines[2]), str(lines[4]), str(lines[6])))
+                csvFile1.close()
                 cam.release()
-                detect.main()
+                cv2.destroyAllWindows()
+                maskdetection()
                 break
             else:
                 Id = 'Unknown'
@@ -348,6 +542,13 @@ def TrackImages():
             writer = csv.writer(csvFile1)
             writer.writerow(col_names)
             writer.writerow(attendance)
+            #img_name = "opencv_frame_{}.png".format(img_counter)
+            """cv2.imwrite("AttendanceImages/ " + currentDateTime +  ".jpg",
+                            gray[y:y + h, x:x + w])
+            img_name = "TrainingImage/ " + currentDateTime + ".jpg"
+            storeImage = im = open(img_name, 'rb').read()"""
+                
+            #conn.execute("INSERT INTO attendance(userId, img, createdOn) VALUES(?,?,?)",(ID, sqlite3.Binary(storeImage),Id,currentDateTime))
         csvFile1.close()
     with open("Attendance/Attendance_" + date + ".csv", 'r') as csvFile1:
         reader1 = csv.reader(csvFile1)
@@ -357,6 +558,7 @@ def TrackImages():
                 if (i % 2 != 0):
                     iidd = str(lines[0]) + '   '
                     tb.insert('', 0, text=iidd, values=(str(lines[2]), str(lines[4]), str(lines[6])))
+                    
     csvFile1.close()
     cam.release()
     cv2.destroyAllWindows()

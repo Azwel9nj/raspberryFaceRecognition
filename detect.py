@@ -21,6 +21,8 @@ from tflite_support.task import core
 from tflite_support.task import processor
 from tflite_support.task import vision
 import utils
+import numpy as np
+import originalfacerec
 
 
 def run(model: str, camera_id: int, width: int, height: int, num_threads: int,
@@ -81,6 +83,25 @@ def run(model: str, camera_id: int, width: int, height: int, num_threads: int,
 
     # Run object detection estimation using the model.
     detection_result = detector.detect(input_tensor)
+    #Num_of_detections = len(get_list(detection_result))
+    #print(detection_result.shape())
+    #print(detection_result)
+    #print(detection_result)
+    #Add a check if array is empty try catch
+    #foundDetection = ((detection_result.detections[0].classes[0].index))
+    try:
+      foundDetection = ((detection_result.detections[0].classes[0].index))
+    except:
+      foundDetection = 4
+
+    print(foundDetection)  
+    
+
+    if(foundDetection == 0):
+      
+      cap.release()
+      cv2.destroyAllWindows()
+      originalfacerec.TrackImages()
 
     # Draw keypoints and edges on input image
     image = utils.visualize(image, detection_result)
