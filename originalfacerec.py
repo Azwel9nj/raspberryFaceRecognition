@@ -311,6 +311,7 @@ def psw():
             mess._show(title='Password Registered', message='New password was registered successfully!!')
             return
     password = tsd.askstring('Password', 'Enter Password', show='*')
+    
     if (password == str_pass):
         TrainImages()
 
@@ -319,7 +320,15 @@ def psw():
     else:
         mess._show(title='Wrong Password', message='You have entered wrong password')
 """
-
+def getProfile(id):
+    conn=sqlite3.connect("FaceBase.db")
+    cmd="SELECT * FROM users WHERE ID="+str(id)
+    cursor=conn.execute(cmd)
+    profile=None
+    for row in cursor:
+        profile=row
+    conn.close()
+    return profile
 #$$$$$$$$$$$$$
 def TakeImages():
     name = (txt2.get())
@@ -362,7 +371,7 @@ def TakeImages():
         detector = cv2.CascadeClassifier(harcascadePath)
         sampleNum = 0
         t_end = 1
-        while (True):
+        while True:
             ret, img = cam.read()
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             faces = detector.detectMultiScale(gray, 1.05, 5)
@@ -415,7 +424,7 @@ def TrainImages():
     #path = os.path.join(parent_dir, name)
     check_haarcascadefile()
     assure_path_exists("Pass_Train/")
-    recognizer = cv2.face_LBPHFaceRecognizer.create()
+    recognizer = cv2.face.LBPHFaceRecognizer_create()
     harcascadePath = "haarcascade_frontalface_default.xml"
     detector = cv2.CascadeClassifier(harcascadePath)
     faces, ID = getImagesAndLabels(os.path.join(parent_dir, name))
@@ -435,22 +444,26 @@ def getImagesAndLabels(path):
     # get the path of all the files in the folder
     imagePaths = [os.path.join(path, f) for f in os.listdir(path)]
     # create empty face list
-    faces = []
+    faces_samples = []
     # create empty ID list
     Ids = []
+    harcascadePath = "haarcascade_frontalface_default.xml"
+    detector = cv2.CascadeClassifier(harcascadePath)
     # now looping through all the image paths and loading the Ids and the images
-    for imagePath in imagePaths:
+    for image_path in imagePaths:
         # loading the image and converting it to gray scale
-        pilImage = Image.open(imagePath).convert('L')
+        pilImage = Image.open(image_path).convert('L')
         # Now we are converting the PIL image into numpy array
         imageNp = np.array(pilImage, 'uint8')
-        # getting the Id from the image
-        ID = int(os.path.split(imagePath)[-1].split(".")[1])
-        # extract the face from the training image sample
-        faces.append(imageNp)
-        Ids.append(ID)
-    return faces, Ids
-
+        #In order to get id
+        if os.path.split(image_path)[-1].split(".")[-1] !='jpg':
+            continue
+        image_id = int(os.path.split(image_path)[-1].split(".")[1])
+        faces = detector.detectMultiScale(imageNp)
+        for (x, y, w, h) in faces:
+            faces_samples.append(imageNp[y:y + h, x:x + w])
+            Ids.append(image_id)
+    return faces_samples, Ids
 ###########################################################################################
 #$$$$$$$$$$$$$
 def TrackImages():
