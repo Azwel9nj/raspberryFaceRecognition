@@ -543,6 +543,20 @@ def TrackImages():
             print(profile)
             if(profile!=None):
                 cv2.putText(im,"Name : "+str(profile[1]),(x,y+h+20),fontface, fontscale, fontcolor)
+                img_name = ("AttendanceImages/ " + str(profile[1]) + "." + str(profile[2]) + "." + str(currentDateTime) + ".jpg")
+                    
+                cv2.imwrite("AttendanceImages/ " + str(profile[1]) + "." + str(profile[2]) + "." + str(currentDateTime) + ".jpg",
+                            gray[y:y + h, x:x + w])
+                storeImage = im = open(img_name, 'rb').read()
+                #storeImage = im = open(img_name, 'rb').read()
+                conn.execute("INSERT INTO attendance(userId, img,createdOn) VALUES(?,?,?)",(str(profile[2]) , sqlite3.Binary(storeImage) ,currentDateTime))
+                print("{} written!".format(img_name))
+                conn.commit()
+                #csvFile1.close()
+                cam.release()
+                cv2.destroyAllWindows()
+                maskdetection()
+                break
                 #cv2.putText(img,"Age : "+str(profile[2]),(x,y+h+45),fontface, fontscale, fontcolor);
                 #cv2.putText(img,"Gender : "+str(profile[3]),(x,y+h+70),fontface, fontscale, fontcolor); 
                 #cv2.putText(img,"Criminal Records : "+str(profile[4]),(x,y+h+95),fontface, fontscale, fontcolor);
