@@ -611,35 +611,6 @@ def TrackImages():
         cv2.imshow('Taking Attendance', im)
         if (cv2.waitKey(1) == ord('q')):
             break
-    ts = time.time()
-    date = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
-    exists = os.path.isfile("Attendance/Attendance_" + date + ".csv")
-    if exists:
-        with open("Attendance/Attendance_" + date + ".csv", 'a+') as csvFile1:
-            writer = csv.writer(csvFile1)
-            writer.writerow(attendance)
-        csvFile1.close()
-    else:
-        with open("Attendance/Attendance_" + date + ".csv", 'a+') as csvFile1:
-            writer = csv.writer(csvFile1)
-            writer.writerow(col_names)
-            writer.writerow(attendance)
-            #img_name = "opencv_frame_{}.png".format(img_counter)
-            """cv2.imwrite("AttendanceImages/ " + currentDateTime +  ".jpg",
-                            gray[y:y + h, x:x + w])
-            img_name = "TrainingImage/ " + currentDateTime + ".jpg"
-            storeImage = im = open(img_name, 'rb').read()"""
-                
-            #conn.execute("INSERT INTO attendance(userId, img, createdOn) VALUES(?,?,?)",(ID, sqlite3.Binary(storeImage),Id,currentDateTime))
-        csvFile1.close()
-    with open("Attendance/Attendance_" + date + ".csv", 'r') as csvFile1:
-        reader1 = csv.reader(csvFile1)
-        for lines in reader1:
-            i = i + 1
-            if (i > 1):
-                if (i % 2 != 0):
-                    iidd = str(lines[0]) + '   '
-                    tb.insert('', 0, text=iidd, values=(str(lines[2]), str(lines[4]), str(lines[6])))
                     
     csvFile1.close()
     cam.release()
