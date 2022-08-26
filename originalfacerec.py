@@ -320,6 +320,24 @@ def psw():
     else:
         mess._show(title='Wrong Password', message='You have entered wrong password')
 """
+#User Registration
+def insertOrUpdate(Id,Name):
+    conn=sqlite3.connect("FaceBase.db")
+    cmd="SELECT * FROM People WHERE ID="+str(Id)
+    cursor=conn.execute(cmd)
+    isRecordExist=0
+    for row in cursor:
+        isRecordExist=1
+    if(isRecordExist==1):
+           cmd="UPDATE people SET Name=' "+str(name)+" ' WHERE ID="+str(Id)
+ 
+    else:
+         cmd="INSERT INTO people(ID,Name) Values("+str(Id)+",' "+str(name)+" ' )"
+      
+    conn.execute(cmd)
+    conn.commit()
+    conn.close()
+
 def getProfile(id):
     conn=sqlite3.connect("FaceBase.db")
     cmd="SELECT * FROM users WHERE ID="+str(id)
