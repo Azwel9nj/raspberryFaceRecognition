@@ -40,6 +40,9 @@ import utils
 import numpy as np
 import originalfacerec
 
+fontface = cv2.FONT_HERSHEY_SIMPLEX
+fontscale = 1
+fontcolor = (0, 255, 0)
 
 def run(model: str, camera_id: int, width: int, height: int, num_threads: int,
         enable_edgetpu: bool) -> None:
@@ -321,8 +324,8 @@ def psw():
         mess._show(title='Wrong Password', message='You have entered wrong password')
 """
 #User Registration
-def insertOrUpdate(Id,Name):
-    conn=sqlite3.connect("FaceBase.db")
+def insertOrUpdate(Id,name):
+    conn=sqlite3.connect("facemaskattendance.db")
     cmd="SELECT * FROM People WHERE ID="+str(Id)
     cursor=conn.execute(cmd)
     isRecordExist=0
@@ -337,10 +340,10 @@ def insertOrUpdate(Id,Name):
     conn.execute(cmd)
     conn.commit()
     conn.close()
-
+#get user profile
 def getProfile(id):
-    conn=sqlite3.connect("FaceBase.db")
-    cmd="SELECT * FROM users WHERE ID="+str(id)
+    conn=sqlite3.connect("facemaskattendance.db")
+    cmd="SELECT * FROM users WHERE userId="+str(id)
     cursor=conn.execute(cmd)
     profile=None
     for row in cursor:
@@ -356,8 +359,9 @@ def TakeImages():
     assure_path_exists("TrainingImage/")
     #Make name sub directory
     parent_dir = "TrainingImage/"
-    path = os.path.join(parent_dir, name)
-    os.mkdir(path)
+    #Custom Path Per User
+    #path = os.path.join(parent_dir, name)
+    #os.mkdir(path)
     ###Database Option Code
     """storeImage = im = open(img_name, 'rb').read()
     conn.execute("INSERT INTO images(name, img, createdOn) VALUES(?,?,?)",(img_name , sqlite3.Binary(storeImage),currentDateTime))
@@ -380,7 +384,7 @@ def TakeImages():
             serial = 1
         csvFile1.close()
     Id = (txt.get())
-    
+    serial = Id
     currentDateTime = datetime.datetime.now()
     conn.execute("INSERT INTO users(name, userId, createdOn) VALUES(?,?,?)",(name ,Id ,currentDateTime))
     if ((name.isalpha()) or (' ' in name)):
@@ -392,20 +396,24 @@ def TakeImages():
         while True:
             ret, img = cam.read()
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            faces = detector.detectMultiScale(gray, 1.05, 5)
+            faces = detector.detectMultiScale(gray, 1.3, 5)
             for (x, y, w, h) in faces:
                 #currentDateTime = datetime.datetime.now()
                 cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 # incrementing sample number
                 sampleNum = sampleNum + 1
                 # saving the captured face in the dataset folder TrainingImage
-                
-                cv2.imwrite(os.path.join(path,name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg"),
+                cv2.imwrite("TrainingImage/ " + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg",
                             gray[y:y + h, x:x + w])
+                # display the frame
                 cv2.imshow('Taking Images', img)
+                #cv2.imwrite(os.path.join(path,name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg"),
+                #            gray[y:y + h, x:x + w])
+                #cv2.imshow('Taking Images', img)
                 
                 #imgname = os.path.join(IMAGES_PATH,labels,labels+'.'+'{}.jpg'.format(str(uuid.uuid1())))
-                img_name = os.path.join(path,name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg")
+                #img_name = os.path.join(path,name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg")
+                img_name = os.path.join("TrainingImage/ " + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg")
                 storeImage = im = open(img_name, 'rb').read()
                 
                 conn.execute("INSERT INTO images(imgname, img, userId, createdOn) VALUES(?,?,?,?)",(img_name , sqlite3.Binary(storeImage),Id,currentDateTime))
@@ -418,7 +426,7 @@ def TakeImages():
             if cv2.waitKey(100) & 0xFF == ord('q'):
                 break
             # break if the sample number is morethan 100
-            elif sampleNum > 9:
+            elif sampleNum > 4:
                 break
             #t_end = t_end + 1
         cam.release()
@@ -438,14 +446,15 @@ def TakeImages():
 #$$$$$$$$$$$$$
 def TrainImages():
     name = (txt2.get())
-    parent_dir = "TrainingImage/"
+    #parent_dir = "TrainingImage/"
     #path = os.path.join(parent_dir, name)
     check_haarcascadefile()
     assure_path_exists("Pass_Train/")
     recognizer = cv2.face.LBPHFaceRecognizer_create()
     harcascadePath = "haarcascade_frontalface_default.xml"
     detector = cv2.CascadeClassifier(harcascadePath)
-    faces, ID = getImagesAndLabels(os.path.join(parent_dir, name))
+    #faces, ID = getImagesAndLabels(os.path.join(parent_dir, name))
+    faces, ID = getImagesAndLabels("TrainingImage")
     try:
         recognizer.train(faces, np.array(ID))
     except:
@@ -474,13 +483,19 @@ def getImagesAndLabels(path):
         # Now we are converting the PIL image into numpy array
         imageNp = np.array(pilImage, 'uint8')
         #In order to get id
+        ID=int(os.path.split(image_path)[-1].split('.')[1])
+        faces_samples.append(imageNp)
+        Ids.append(ID)
+        #cv2.imshow("training",faceNp)
+        cv2.waitKey(10)
+        """
         if os.path.split(image_path)[-1].split(".")[-1] !='jpg':
             continue
         image_id = int(os.path.split(image_path)[-1].split(".")[1])
         faces = detector.detectMultiScale(imageNp)
         for (x, y, w, h) in faces:
             faces_samples.append(imageNp[y:y + h, x:x + w])
-            Ids.append(image_id)
+            Ids.append(image_id)"""
     return faces_samples, Ids
 ###########################################################################################
 #$$$$$$$$$$$$$
@@ -523,6 +538,20 @@ def TrackImages():
         for (x, y, w, h) in faces:
             cv2.rectangle(im, (x, y), (x + w, y + h), (255, 0, 0), 2)
             serial, conf = recognizer.predict(gray[y:y + h, x:x + w])
+            print(serial)
+            profile=getProfile(serial)
+            print(profile)
+            if(profile!=None):
+                cv2.putText(im,"Name : "+str(profile[1]),(x,y+h+20),fontface, fontscale, fontcolor)
+                #cv2.putText(img,"Age : "+str(profile[2]),(x,y+h+45),fontface, fontscale, fontcolor);
+                #cv2.putText(img,"Gender : "+str(profile[3]),(x,y+h+70),fontface, fontscale, fontcolor); 
+                #cv2.putText(img,"Criminal Records : "+str(profile[4]),(x,y+h+95),fontface, fontscale, fontcolor);
+            else:
+                cv2.putText(im,"Name : Unknown",(x,y+h+20),fontface, fontscale, fontcolor)
+                #cv2.putText(img,"Age : Unknown",(x,y+h+45),fontface, fontscale, fontcolor);
+                #cv2.putText(img,"Gender : Unknown",(x,y+h+70),fontface, fontscale, fontcolor);
+                #cv2.putText(img,"Criminal Records : Unknown",(x,y+h+95),fontface, fontscale, fontcolor);
+            """
             if (conf < 50):
                 ts = time.time()
                 date = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y')
@@ -564,7 +593,7 @@ def TrackImages():
             else:
                 Id = 'Unknown'
                 bb = str(Id)
-            cv2.putText(im, str(bb), (x, y + h), font, 1, (0, 251, 255), 2)
+            cv2.putText(im, str(bb), (x, y + h), font, 1, (0, 251, 255), 2)"""
         cv2.imshow('Taking Attendance', im)
         if (cv2.waitKey(1) == ord('q')):
             break
