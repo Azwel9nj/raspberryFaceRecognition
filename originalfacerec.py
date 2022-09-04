@@ -364,72 +364,60 @@ def getProfile(id):
     conn.close()
     return profile
 #$$$$$$$$$$$$$
-def TakeImages():
-    
-    name = (txt2.get())
+def TakeImages():    
     check_haarcascadefile()
+    harcascadePath = "haarcascade_frontalface_default.xml"
     columns = ['SERIAL NO.', '', 'ID', '', 'NAME']
     assure_path_exists("StudentDetails/")
     assure_path_exists("TrainingImage/")    
     parent_dir = "TrainingImage/"    
-    serial = 0
-    exists = os.path.isfile("StudentDetails/StudentDetails.csv")
-    if exists:
-        with open("StudentDetails/StudentDetails.csv", 'r') as csvFile1:
-            reader1 = csv.reader(csvFile1)
-            for l in reader1:
-                serial = serial + 1
-        serial = (serial // 2)
-        csvFile1.close()
-    else:
-        with open("StudentDetails/StudentDetails.csv", 'a+') as csvFile1:
-            writer = csv.writer(csvFile1)
-            writer.writerow(columns)
-            serial = 1
-        csvFile1.close()
-    Id = (txt.get())
-    
-    
+    serial = 0   
+    Id = (txt.get()) 
+    name = (txt2.get())  
     serial = Id
     currentDateTime = datetime.datetime.now()
-    conn.execute("INSERT INTO users(name, userId, createdOn) VALUES(?,?,?)",(name ,Id ,currentDateTime))
-    print("Here")
-
-    #if ((name.isalpha()) or (' ' in name)):
+    conn.execute("INSERT INTO users(name, userId, createdOn) VALUES(?,?,?)",(name ,Id ,currentDateTime))    
     cam = cv2.VideoCapture(0)
-    harcascadePath = "haarcascade_frontalface_default.xml"
-    detector = cv2.CascadeClassifier(harcascadePath)
+    faceCascade = cv2.CascadeClassifier(harcascadePath)
+    #detector = cv2.CascadeClassifier(harcascadePath)
     sampleNum = 0
     t_end = 1
-    while True:
-        ret, img = cam.read()
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        faces = detector.detectMultiScale(gray, 1.3, 5)
-        for (x, y, w, h) in faces:
+    
+    while True:        
+        ret, im = cam.read()
+        #detector = cv2.CascadeClassifier(harcascadePath)
+        gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)        
+        faces = faceCascade.detectMultiScale(gray, 1.2, 5)  
+        #print("here")    
+        #for (x, y, w, h) in faces:
+            #print(sampleNum)
             #currentDateTime = datetime.datetime.now()
-            cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            # incrementing sample number
-            sampleNum = sampleNum + 1
-            # saving the captured face in the dataset folder TrainingImage
-            cv2.imwrite("TrainingImage/ " + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg",
-                        gray[y:y + h, x:x + w])
-            # display the frame
-            cv2.imshow('Taking Images', img)                
-            img_name = os.path.join("TrainingImage/ " + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg")
-            storeImage = im = open(img_name, 'rb').read()                
-            conn.execute("INSERT INTO images(imgname, img, userId, createdOn) VALUES(?,?,?,?)",(img_name , sqlite3.Binary(storeImage),Id,currentDateTime))
-            print("{} written!".format(img_name))
-            conn.commit()
+        #cv2.rectangle(im, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        # incrementing sample number
+        sampleNum = sampleNum + 1
+        # saving the captured face in the dataset folder TrainingImage
+        cv2.imwrite("TrainingImage/ " + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg",im)
+        # display the frame
+        cv2.imshow('Taking Images', im)                
+        img_name = os.path.join("TrainingImage/ " + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg")
+        storeImage = im = open(img_name, 'rb').read()                
+        conn.execute("INSERT INTO images(imgname, img, userId, createdOn) VALUES(?,?,?,?)",(img_name , sqlite3.Binary(storeImage),Id,currentDateTime))
+        print("{} written!".format(img_name))
+        conn.commit()
+        print(sampleNum)
             # display the frame                
         # wait for 100 miliseconds
         if cv2.waitKey(100) & 0xFF == ord('q'):
+            cam.release()
+            cv2.destroyAllWindows() 
             break
         # break if the sample number is morethan 100
         elif sampleNum > 4:
+            cam.release()
+            cv2.destroyAllWindows()
             break
-        cam.release()
-        cv2.destroyAllWindows()
-        print("Here")
+        
+        
         """
         res = "Images Taken for ID : " + Id
         row = [serial, '', Id, '', name]
@@ -459,7 +447,8 @@ def TrainImages():
         mess._show(title='No Registrations', message='Please Register someone first!!!')
         return
     recognizer.save("Pass_Train/Trainner.yml")
-    res = "Profile Saved Successfully"    
+    res = "Profile Saved Successfully" 
+    print("Profile Saved")   
 
 ############################################################################################3
 #$$$$$$$$$$$$$
@@ -488,7 +477,6 @@ def getImagesAndLabels(path):
 ###########################################################################################
 #$$$$$$$$$$$$$
 def TrackImages():
-    print("here")
     check_haarcascadefile()    
     assure_path_exists("Attendance/")
     assure_path_exists("StudentDetails/")
@@ -590,12 +578,12 @@ entry_bg_1 = canvas.create_image(
     319.5,
     image=entry_image_1
 )
-txt = Entry(
+txt2 = Entry(
     bd=0,
     bg="#D9D9D9",
     highlightthickness=0
 )
-txt.place(
+txt2.place(
     x=529.0,
     y=300.0,
     width=588.0,
@@ -609,12 +597,12 @@ entry_bg_2 = canvas.create_image(
     160.5,
     image=entry_image_2
 )
-txt2 = Entry(
+txt = Entry(
     bd=0,
     bg="#D9D9D9",
     highlightthickness=0
 )
-txt2.place(
+txt.place(
     x=529.0,
     y=141.0,
     width=588.0,
