@@ -14,6 +14,9 @@ import datetime
 import time
 import detect
 from pathlib import Path
+import requests
+import base64
+import json
 
 # from tkinter import *
 # Explicit imports to satisfy Flake8
@@ -520,7 +523,40 @@ def TrackImages():
                 img_name = ("AttendanceImages/ " + str(profile[1]) + "." + str(profile[2]) + "." + str(currentDateTime) + ".jpg")                    
                 cv2.imwrite("AttendanceImages/ " + str(profile[1]) + "." + str(profile[2]) + "." + str(currentDateTime) + ".jpg",
                             gray[y:y + h, x:x + w])
-                storeImage = im = open(img_name, 'rb').read()                
+                storeImage = im = open(img_name, 'rb').read()
+                #try:
+                url = 'http://192.168.0.178:80/api/mama'
+                with open(img_name, "rb") as f:
+                    im_bytes = f.read()
+                #files = base64.b64encode(im_bytes).decode("utf8")
+                
+                encodeImg = base64.b64encode(im_bytes).decode("utf8")
+                #response = requests.post(url, files=files)
+                headers = {
+                    'Content-type': 'application/json',
+                    'Accept': 'text/plain'
+                    }
+                payload = json.dumps({
+                    "image": encodeImg,
+                    "userId": str(profile[2]),
+                    #"createdOn": currentDateTime
+                    })
+                response = requests.post(url, data = payload, headers = headers)
+                try:
+                    data = response.json()
+                    print(data)
+                except requests.exceptions.RequestException:
+                    print(response.text)
+                """API_ENDPOINT = 'http://192.168.0.178:80/api/mama'
+                data ={
+                    (str(profile[2])),
+                    sqlite3.Binary(storeImage),
+                    currentDateTime
+                }"""
+                #response = requests.get(API_ENDPOINT)
+                #print(response.status_code)
+                #except:
+                #print("I crashed")
                 conn.execute("INSERT INTO attendance(userId, img,createdOn) VALUES(?,?,?)",(str(profile[2]) , sqlite3.Binary(storeImage) ,currentDateTime))
                 print("{} written!".format(img_name))
                 conn.commit()                
