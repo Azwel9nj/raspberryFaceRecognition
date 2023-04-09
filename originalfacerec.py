@@ -17,6 +17,8 @@ from pathlib import Path
 import requests
 import base64
 import json
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 
 # from tkinter import *
 # Explicit imports to satisfy Flake8
@@ -524,39 +526,69 @@ def TrackImages():
                 cv2.imwrite("AttendanceImages/ " + str(profile[1]) + "." + str(profile[2]) + "." + str(currentDateTime) + ".jpg",
                             gray[y:y + h, x:x + w])
                 storeImage = im = open(img_name, 'rb').read()
+                with open(img_name, 'rb') as f:
+                    image_data = base64.b64encode(f.read()).decode('utf-8')
                 #try:
-                url = 'http://192.168.0.178:80/api/mama'
-                with open(img_name, "rb") as f:
-                    im_bytes = f.read()
-                #files = base64.b64encode(im_bytes).decode("utf8")
+                url = 'http://httpbin.org/get'
+                # prepare headers for http request
+                #content_type = 'image/jpeg'
+                #headers = {'content-type': content_type}
+                """
+                ata = {}
+                with open(img_name, mode='rb') as file:
+                    img = file.read()
+
+                data['img'] = base64.b64encode(img)
+                print(json.dumps(data))"""
+
+                # The function cv2.imread() is used to read an image.
                 
-                encodeImg = base64.b64encode(im_bytes).decode("utf8")
-                #response = requests.post(url, files=files)
-                headers = {
-                    'Content-type': 'application/json',
-                    'Accept': 'text/plain'
-                    }
-                payload = json.dumps({
-                    "image": encodeImg,
-                    "userId": str(profile[2]),
-                    #"createdOn": currentDateTime
-                    })
-                response = requests.post(url, data = payload, headers = headers)
+                
+                
+
+            
+                """
+                im_bytes = open(img_name, "rb").read()        
+                im_b64 = base64.b64encode(im_bytes).decode("utf8")
+
+                headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+                
+                payload = json.dumps({"image": im_b64, "other_key": "value"})
+                response = requests.post(url, data=payload, headers=headers)
+                data = response.json()
+                print(data) """ 
+                """
                 try:
-                    data = response.json()
-                    print(data)
+                    data = response.json()     
+                    print(data)                
                 except requests.exceptions.RequestException:
-                    print(response.text)
-                """API_ENDPOINT = 'http://192.168.0.178:80/api/mama'
-                data ={
-                    (str(profile[2])),
-                    sqlite3.Binary(storeImage),
-                    currentDateTime
-                }"""
-                #response = requests.get(API_ENDPOINT)
-                #print(response.status_code)
-                #except:
-                #print("I crashed")
+                    print("i died")
+                """
+                #f = storeImage.read()
+                b = bytearray(storeImage)
+                im_b64 = base64.b64encode(storeImage).decode("utf8")
+                d = json.dumps(im_b64)
+                session = requests.Session()
+                retry = Retry(connect=3, backoff_factor=0.5)
+                adapter = HTTPAdapter(max_retries=retry)
+                session.mount('http://', adapter)
+                session.mount('https://', adapter)
+
+                API_ENDPOINT = 'http://192.168.0.127:8090/api/images'
+                payload ={
+                    'userId' : (str(profile[2])),
+                    'userName': (str(profile[1])),
+                    #'image' : image_data,
+                    'date' : (str(currentDateTime))                    
+                }
+                headers = {'Content-Type': 'application/json'}
+                data = json.dumps(payload)
+                response = requests.post(API_ENDPOINT,headers=headers, data=data)
+                try:
+                    print(response.status_code)
+                    #print(response.json())
+                except:
+                    print("I crashed")
                 conn.execute("INSERT INTO attendance(userId, img,createdOn) VALUES(?,?,?)",(str(profile[2]) , sqlite3.Binary(storeImage) ,currentDateTime))
                 print("{} written!".format(img_name))
                 conn.commit()                
