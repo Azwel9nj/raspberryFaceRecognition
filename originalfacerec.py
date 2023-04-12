@@ -574,16 +574,16 @@ def TrackImages():
                 session.mount('http://', adapter)
                 session.mount('https://', adapter)
 
-                API_ENDPOINT = 'http://192.168.0.127:8090/api/images'
+                API_ENDPOINT = 'http://192.168.0.127:8091/api/upload-image'
                 payload ={
                     'userId' : (str(profile[2])),
                     'userName': (str(profile[1])),
-                    #'image' : image_data,
+                    'image' : image_data,
                     'date' : (str(currentDateTime))                    
                 }
                 headers = {'Content-Type': 'application/json'}
                 data = json.dumps(payload)
-                response = requests.post(API_ENDPOINT,headers=headers, data=data)
+                response = requests.post(API_ENDPOINT,headers=headers,data = data)
                 try:
                     print(response.status_code)
                     #print(response.json())
