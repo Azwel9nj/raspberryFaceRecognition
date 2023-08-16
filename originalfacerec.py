@@ -574,7 +574,7 @@ def TrackImages():
                 session.mount('http://', adapter)
                 session.mount('https://', adapter)
 
-                API_ENDPOINT = 'http://192.168.0.127:8091/api/upload-image'
+                API_ENDPOINT = 'http://192.168.0.178:8000/api/upload-image'
                 payload ={
                     'userId' : (str(profile[2])),
                     'userName': (str(profile[1])),
