@@ -17,7 +17,9 @@ from pathlib import Path
 import requests
 import base64
 import json
+import tempfile
 from urllib3.util.retry import Retry
+# from requests.packages.urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
 # from tkinter import *
@@ -401,10 +403,10 @@ def TakeImages():
         # incrementing sample number
         sampleNum = sampleNum + 1
         # saving the captured face in the dataset folder TrainingImage
-        cv2.imwrite("TrainingImage/ " + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg",im)
+        cv2.imwrite("TrainingImage/" + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg",im)
         # display the frame
         cv2.imshow('Taking Images', im)                
-        img_name = os.path.join("TrainingImage/ " + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg")
+        img_name = os.path.join("TrainingImage/" + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg")
         storeImage = im = open(img_name, 'rb').read()                
         conn.execute("INSERT INTO images(imgname, img, userId, createdOn) VALUES(?,?,?,?)",(img_name , sqlite3.Binary(storeImage),Id,currentDateTime))
         print("{} written!".format(img_name))
@@ -421,22 +423,12 @@ def TakeImages():
             cam.release()
             cv2.destroyAllWindows()
             break
-        
-        
-        """
-        res = "Images Taken for ID : " + Id
-        row = [serial, '', Id, '', name]
-        
-        with open('StudentDetails/StudentDetails.csv', 'a+') as csvFile:
-            writer = csv.writer(csvFile)
-            writer.writerow(row)
-        csvFile.close()
-    else:
-        if (name.isalpha() == False):
-            res = "Enter Correct name"""
-            
-########################################################################################
-#$$$$$$$$$$$$$
+ 
+
+
+
+
+
 def TrainImages():
     name = (txt2.get())
     check_haarcascadefile()
@@ -454,9 +446,24 @@ def TrainImages():
     recognizer.save("Pass_Train/Trainner.yml")
     res = "Profile Saved Successfully" 
     print("Profile Saved")   
+    #Send the data to the Laravel endpoint
+    url = 'http://192.168.25.112:8000/api/uploadTrainnerYml'
+    
+    # Read the content of the YAML file
+    with open('Pass_Train/Trainner.yml', 'r') as file:
+        content = file.read()
 
+    response = requests.post(url, data={'name': name, 'content': content})
+
+    if response.status_code == 200:
+        print('Profile Saved Successfully')
+    else:
+        print('Failed to save profile')
 ############################################################################################3
 #$$$$$$$$$$$$$
+
+###########################################################################################
+
 def getImagesAndLabels(path):
     # get the path of all the files in the folder
     imagePaths = [os.path.join(path, f) for f in os.listdir(path)]
@@ -470,20 +477,68 @@ def getImagesAndLabels(path):
     for image_path in imagePaths:
         # loading the image and converting it to gray scale
         pilImage = Image.open(image_path).convert('L')
-        # Now we are converting the PIL image into numpy array
+        # Now we are converting the PIL image into a numpy array
         imageNp = np.array(pilImage, 'uint8')
-        #In order to get id
-        ID=int(os.path.split(image_path)[-1].split('.')[1])
-        faces_samples.append(imageNp)
-        Ids.append(ID)
-        #cv2.imshow("training",faceNp)
-        cv2.waitKey(10)        
+        # In order to get id
+        try:
+            # Extract the ID and remove leading/trailing spaces
+            ID = int(os.path.split(image_path)[-1].split('.')[1].strip())
+            faces_samples.append(imageNp)
+            Ids.append(ID)
+        except (ValueError, IndexError):
+            # Handle cases where ID extraction fails
+            print(f"Skipping invalid image path: {image_path}")
+        cv2.waitKey(10)
     return faces_samples, Ids
-###########################################################################################
+# def getImagesAndLabels(path):
+#     # get the path of all the files in the folder
+#     imagePaths = [os.path.join(path, f) for f in os.listdir(path)]
+#     # create empty face list
+#     faces_samples = []
+#     # create empty ID list
+#     Ids = []
+#     harcascadePath = "haarcascade_frontalface_default.xml"
+#     detector = cv2.CascadeClassifier(harcascadePath)
+
+#     # now looping through all the image paths and loading the Ids and the images
+#     for image_path in imagePaths:
+#         try:
+#             # loading the image and converting it to gray scale
+#             pilImage = Image.open(image_path).convert('L')
+#             # Now we are converting the PIL image into numpy array
+#             imageNp = np.array(pilImage, 'uint8')
+#             # In order to get id
+#             ID = int(os.path.splitext(os.path.basename(image_path))[0].split('.')[-1])
+#             faces_samples.append(imageNp)
+#             Ids.append(ID)
+#             # cv2.imshow("training", faceNp)
+#             cv2.waitKey(10)
+#         except (ValueError, OSError) as e:
+#             print(f"Error processing {image_path}: {e}")
+
+#     return faces_samples, Ids
+################################################
 def maskMonitor():
     # Add the code for the "MASK MONITOR" functionality here
     pass  # Replace 'pass' with the actual code
 #$$$$$$$$$$$$$
+def fetch_trainner_yml_content():
+    url = 'http://192.168.25.112:8000/api/readTrainnerYml'
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        return response.content
+    else:
+        print('Failed to fetch Trainner.yml content from the server.')
+        return None
+
+def update_local_trainner_yml(content):
+    file_path = "Pass_Train/Trainner.yml"
+    with open(file_path, 'wb') as local_file:
+        local_file.write(content)
+
+
+
 def TrackImages():
     check_haarcascadefile()    
     assure_path_exists("Attendance/")
@@ -493,10 +548,19 @@ def TrackImages():
     msg = ''
     i = 0
     j = 0
+    # Usage
+    trainner_content = fetch_trainner_yml_content()
+
+    if trainner_content:
+        update_local_trainner_yml(trainner_content)
+        print("Trainner.yml updated successfully.")
+    else:
+        print("Failed to fetch Trainner.yml content from the server.")
     recognizer =cv2.face.LBPHFaceRecognizer_create() 
     exists3 = os.path.isfile("Pass_Train/Trainner.yml")
     if exists3:
         recognizer.read("Pass_Train/Trainner.yml")
+        print ("Trainer Exists")
     else:
         mess._show(title='Data Missing', message='Please click on Save Profile to reset data!!')
         return
@@ -533,41 +597,7 @@ def TrackImages():
                     image_data = base64.b64encode(f.read()).decode('utf-8')
                 #try:
                 url = 'http://httpbin.org/get'
-                # prepare headers for http request
-                #content_type = 'image/jpeg'
-                #headers = {'content-type': content_type}
-                """
-                ata = {}
-                with open(img_name, mode='rb') as file:
-                    img = file.read()
-
-                data['img'] = base64.b64encode(img)
-                print(json.dumps(data))"""
-
-                # The function cv2.imread() is used to read an image.
                 
-                
-                
-
-            
-                """
-                im_bytes = open(img_name, "rb").read()        
-                im_b64 = base64.b64encode(im_bytes).decode("utf8")
-
-                headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
-                
-                payload = json.dumps({"image": im_b64, "other_key": "value"})
-                response = requests.post(url, data=payload, headers=headers)
-                data = response.json()
-                print(data) """ 
-                """
-                try:
-                    data = response.json()     
-                    print(data)                
-                except requests.exceptions.RequestException:
-                    print("i died")
-                """
-                #f = storeImage.read()
                 b = bytearray(storeImage)
                 im_b64 = base64.b64encode(storeImage).decode("utf8")
                 d = json.dumps(im_b64)
@@ -607,7 +637,6 @@ def TrackImages():
     #csvFile1.close()
     cam.release()
     cv2.destroyAllWindows()
-
 #Front End===========================================================
 
 window = Tk()
