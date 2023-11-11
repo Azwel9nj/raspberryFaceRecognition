@@ -480,6 +480,9 @@ def getImagesAndLabels(path):
         cv2.waitKey(10)        
     return faces_samples, Ids
 ###########################################################################################
+def maskMonitor():
+    # Add the code for the "MASK MONITOR" functionality here
+    pass  # Replace 'pass' with the actual code
 #$$$$$$$$$$$$$
 def TrackImages():
     check_haarcascadefile()    
@@ -813,5 +816,23 @@ clearButton.place(
     width=240.0,
     height=46.3365478515625
 )
+
+button_image_6 = PhotoImage(
+    file=relative_to_assets("button_5.png"))
+maskMonitorButton = Button(
+    image=button_image_6,
+    borderwidth=0,
+    activebackground="green",
+    highlightthickness=0,
+    command=maskMonitor,
+    relief="flat"
+)
+maskMonitorButton.place(
+    x=889.0,
+    y=438.0,
+    width=240.0,
+    height=46.3365478515625
+)
+
 window.resizable(False, False)
 window.mainloop()
