@@ -29,7 +29,7 @@ from tkinter import Tk, Canvas, Entry, Text, Button, PhotoImage
 
 OUTPUT_PATH = Path(__file__).parent
 ASSETS_PATH = OUTPUT_PATH / Path("./assets")
-
+global_base_url = ""
 
 def relative_to_assets(path: str) -> Path:
     return ASSETS_PATH / Path(path)
@@ -343,6 +343,67 @@ def psw():
     else:
         mess._show(title='Wrong Password', message='You have entered wrong password')
 """
+
+def create_database():
+    connection = sqlite3.connect("base_url.db")
+    cursor = connection.cursor()
+
+    # Create a table if not exists
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS base_url (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT
+        )
+    ''')
+
+    connection.commit()
+    connection.close()
+
+# Function to save the base URL to SQLite database
+def save_base_url():
+    base_url = base_url_entry.get()
+
+    # Validate if the URL is not empty
+    if not base_url:
+        # Display an error message
+        base_url_entry.delete(0, "end")
+        base_url_entry.insert(0, "NO BASE URL")
+        return
+
+    # Save the base URL to SQLite database
+    connection = sqlite3.connect("base_url.db")
+    cursor = connection.cursor()
+
+    # Clear existing records
+    cursor.execute("DELETE FROM base_url")
+
+    # Insert the new URL
+    cursor.execute("INSERT INTO base_url (url) VALUES (?)", (base_url,))
+    connection.commit()
+    connection.close()
+
+    # Display a success message
+    print("Base URL saved successfully.")
+
+# Function to retrieve the base URL from SQLite database and display it in the entry field
+def display_base_url():
+    connection = sqlite3.connect("base_url.db")
+    cursor = connection.cursor()
+
+    # Retrieve the URL from the database
+    cursor.execute("SELECT url FROM base_url")
+    result = cursor.fetchone()
+
+    connection.close()
+
+    # Display the URL in the entry field or "NO BASE URL" if it doesn't exist
+    if result:
+        base_url_entry.delete(0, "end")
+        base_url_entry.insert(0, result[0])
+    else:
+        base_url_entry.delete(0, "end")
+        base_url_entry.insert(0, "NO BASE URL")
+
 #User Registration
 def insertOrUpdate(Id,name):
     conn=sqlite3.connect("facemaskattendance.db")
@@ -447,7 +508,7 @@ def TrainImages():
     res = "Profile Saved Successfully" 
     print("Profile Saved")   
     #Send the data to the Laravel endpoint
-    url = 'http://192.168.25.112:8000/api/uploadTrainnerYml'
+    url = global_base_url+'api/uploadTrainnerYml'
     
     # Read the content of the YAML file
     with open('Pass_Train/Trainner.yml', 'r') as file:
@@ -523,7 +584,7 @@ def maskMonitor():
     pass  # Replace 'pass' with the actual code
 #$$$$$$$$$$$$$
 def fetch_trainner_yml_content():
-    url = 'http://192.168.25.112:8000/api/readTrainnerYml'
+    url = global_base_url+'/api/readTrainnerYml'
     response = requests.get(url)
 
     if response.status_code == 200:
@@ -537,7 +598,74 @@ def update_local_trainner_yml(content):
     with open(file_path, 'wb') as local_file:
         local_file.write(content)
 
+def save_base_url():
+    # Connect to SQLite database (or create it if not exists)
+    conn = sqlite3.connect('baseurl.db')
+    c = conn.cursor()
 
+    # Create the 'base_url' table if not exists
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS base_url (
+            id INTEGER PRIMARY KEY,
+            url TEXT
+        )
+    ''')
+
+    # Get the base URL from the entry widget
+    base_url = base_url_entry.get()
+
+    # Check if there's an existing record
+    c.execute('SELECT * FROM base_url')
+    existing_record = c.fetchone()
+
+    if existing_record:
+        # If record exists, update the base URL
+        c.execute('UPDATE base_url SET url = ? WHERE id = ?', (base_url, existing_record[0]))
+    else:
+        # If no record, insert a new record
+        c.execute('INSERT INTO base_url (url) VALUES (?)', (base_url,))
+
+    # Commit changes and close the connection
+    conn.commit()
+    conn.close()
+
+    # Update the global variable
+    global global_base_url
+    global_base_url = base_url
+
+# Function to display the base URL
+def display_base_url():
+    # Connect to SQLite database
+    conn = sqlite3.connect('baseurl.db')
+    c = conn.cursor()
+
+    # Create the 'base_url' table if not exists
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS base_url (
+            id INTEGER PRIMARY KEY,
+            url TEXT
+        )
+    ''')
+
+    # Fetch the base URL from the table
+    c.execute('SELECT * FROM base_url')
+    result = c.fetchone()
+
+    # If there's a result, display the base URL
+    if result:
+        base_url_entry.delete(0, END)
+        base_url_entry.insert(0, result[1])
+
+        # Update the global variable
+        global global_base_url
+        global_base_url = result[1]
+    else:
+        # If no result, display "NO BASE URL"
+        base_url_entry.delete(0, END)
+        base_url_entry.insert(0, "NO BASE URL")
+
+    # Close the connection
+    conn.close()
 
 def TrackImages():
     check_haarcascadefile()    
@@ -607,13 +735,14 @@ def TrackImages():
                 session.mount('http://', adapter)
                 session.mount('https://', adapter)
 
-                API_ENDPOINT = 'http://192.168.0.178:8000/api/upload-image'
+                API_ENDPOINT = global_base_url+'/api/upload-image'
                 payload ={
                     'userId' : (str(profile[2])),
                     'userName': (str(profile[1])),
                     'image' : image_data,
                     'date' : (str(currentDateTime))                    
                 }
+                print((str(profile[2])))
                 headers = {'Content-Type': 'application/json'}
                 data = json.dumps(payload)
                 response = requests.post(API_ENDPOINT,headers=headers,data = data)
@@ -653,6 +782,14 @@ canvas = Canvas(
     highlightthickness = 0,
     relief = "ridge"
 )
+base_url_entry_label = Label(window, text="Base URL:")
+base_url_entry_label.place(x=1100, y=40)
+base_url_entry = Entry(window, width=30)
+base_url_entry.place(x=950, y=60)
+
+# Create a button to save the base URL
+save_button = Button(window, text="Save Base URL", command=save_base_url)
+save_button.place(x=1040, y=90)
 
 canvas.place(x = 0, y = 0)
 canvas.create_rectangle(
@@ -864,4 +1001,5 @@ maskMonitorButton.place(
 )
 
 window.resizable(False, False)
+display_base_url()
 window.mainloop()
