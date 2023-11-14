@@ -458,7 +458,16 @@ def TakeImages():
     with sqlite3.connect(DATABASE_PATH) as conn:
         conn.execute("INSERT INTO users(name, userId, createdOn) VALUES(?,?,?)",
                      (name, Id, currentDateTime))
-    
+         # Send user details to the Laravel application
+    url = global_base_url + '/api/upload-user'
+    payload = {
+        'userId': str(Id),
+        'userName': str(name),
+        'date': str(currentDateTime)
+    }
+    headers = {'Content-Type': 'application/json'}
+    data = json.dumps(payload)
+    response = requests.post(url, headers=headers, data=data) 
     cam = cv2.VideoCapture(0)
     faceCascade = cv2.CascadeClassifier(harcascadePath)
     sampleNum = 0
@@ -473,10 +482,24 @@ def TakeImages():
             img_name = os.path.join(TRAINING_IMAGE_DIR, f"{name}.{Id}.{Id}.{sampleNum}.jpg")
             cv2.imwrite(img_name, im)
 
-            storeImage = open(img_name, 'rb').read()
-            conn.execute("INSERT INTO images(imgname, img, userId, createdOn) VALUES(?,?,?,?)",
-                         (img_name, sqlite3.Binary(storeImage), Id, currentDateTime))
+            if sampleNum == 5:
+                storeImage = open(img_name, 'rb').read()
+                conn.execute("INSERT INTO images(imgname, img, userId, createdOn) VALUES(?,?,?,?)",
+                            (img_name, sqlite3.Binary(storeImage), Id, currentDateTime))
+                with open(img_name, 'rb') as f:
+                    files = {'image': (img_name, f, 'image/jpeg')}
+                    data = {
+                        'userId': str(Id),
+                        'date': str(currentDateTime)
+                    }
 
+                    url = global_base_url + '/api/save-user-image'
+                    response = requests.post(url, data=data, files=files)
+
+                try:
+                    print(response.status_code)
+                except:
+                    print("Request failed")
             print(f"{img_name} written!")
 
         cv2.imshow('Taking Images', im)
@@ -486,7 +509,7 @@ def TakeImages():
             cv2.destroyAllWindows()
             break
 
-        if sampleNum > 15:
+        if sampleNum > 25:
             cam.release()
             cv2.destroyAllWindows()
             break
@@ -570,8 +593,91 @@ def delete_training_images(path):
 
 ################################################
 def maskMonitor():
+    check_haarcascadefile()    
+    assure_path_exists("Attendance/")
+    assure_path_exists("StudentDetails/")
+    assure_path_exists("AttendanceImages/")
+    assure_path_exists("MaskMonitor/")
+    
+    currentDateTime = datetime.datetime.now()
+    recognizer = cv2.face.LBPHFaceRecognizer_create() 
+    
+    # Check if the trainer file exists
+    trainer_path = "Pass_Train/Trainner.yml"
+    if not os.path.isfile(trainer_path):
+        mess._show(title='Data Missing', message='Please click on Save Profile to reset data!!')
+        return
+    
+    recognizer.read(trainer_path)
+    print("Trainer Exists")
+
+    harcascadePath = "haarcascade_frontalface_default.xml"
+    faceCascade = cv2.CascadeClassifier(harcascadePath)
+    cam = cv2.VideoCapture(0)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    # Set a recognition confidence threshold
+    confidence_threshold = 50
+
+    # Timer variables
+    last_recognition_time = time.time()
+    recognition_timeout = 60  # 1 minute timeout
+
+    while True:
+        ret, im = cam.read()
+        gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        faces = faceCascade.detectMultiScale(gray, 1.2, 5)
+
+        for (x, y, w, h) in faces:
+            cv2.rectangle(im, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            serial, confidence = recognizer.predict(gray[y:y + h, x:x + w])
+            print(f"Serial: {serial}, Confidence: {confidence}")
+
+            if confidence < confidence_threshold:
+                profile = getProfile(serial)
+
+                if profile is not None:
+                    cv2.putText(im, f"Name: {profile[1]}", (x, y + h + 20), fontface, fontscale, fontcolor)
+                    img_name = f"MaskMonitor/{profile[1]}.{profile[2]}.{currentDateTime}.jpg"
+                    cv2.imwrite(img_name, gray[y:y + h, x:x + w])
+
+                    with open(img_name, 'rb') as f:
+                        files = {'image': (img_name, f, 'image/jpeg')}
+                        data = {
+                            'userId': str(profile[2]),                            
+                            'date': str(currentDateTime)
+                        }
+
+                        url = global_base_url + '/api/mask-off'
+                        response = requests.post(url, data=data, files=files)
+
+                    try:
+                        print(response.status_code)
+                    except:
+                        print("Request failed")
+
+                    # Update the last recognition time
+                    last_recognition_time = time.time()
+                else:
+                    cv2.putText(im, "Name: Unknown", (x, y + h + 20), fontface, fontscale, fontcolor)
+            else:
+                cv2.putText(im, "Name: Unknown (Low Confidence)", (x, y + h + 20), fontface, fontscale, fontcolor)
+
+        cv2.imshow('Monitoring Masks', im)
+
+        # Check if the timeout has passed
+        if time.time() - last_recognition_time > recognition_timeout:
+            print("No recognition for 1 minute. Exiting.")
+            break
+
+        # Break the loop if 'q' key is pressed
+        if cv2.waitKey(1) == ord('q'):
+            break
+
+    cam.release()
+    cv2.destroyAllWindows()
     # Add the code for the "MASK MONITOR" functionality here
-    pass  # Replace 'pass' with the actual code
+   
 #$$$$$$$$$$$$$
 def fetch_trainner_yml_content():
     url = global_base_url+'/api/readTrainnerYml'
@@ -681,8 +787,7 @@ def TrackImages():
     font = cv2.FONT_HERSHEY_SIMPLEX
 
     # Set a recognition confidence threshold
-    confidence_threshold = 500
-
+    confidence_threshold = 35
     while True:
         ret, im = cam.read()
         gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
@@ -693,7 +798,7 @@ def TrackImages():
             serial, confidence = recognizer.predict(gray[y:y + h, x:x + w])
             print(f"Serial: {serial}, Confidence: {confidence}")
 
-            if confidence > confidence_threshold:
+            if confidence < confidence_threshold:
                 profile = getProfile(serial)
 
                 if profile is not None:
@@ -702,19 +807,15 @@ def TrackImages():
                     cv2.imwrite(img_name, gray[y:y + h, x:x + w])
 
                     with open(img_name, 'rb') as f:
-                        image_data = base64.b64encode(f.read()).decode('utf-8')
+                        files = {'image': (img_name, f, 'image/jpeg')}
+                        data = {
+                            'userId': str(profile[2]),
+                            'userName': str(profile[1]),
+                            'date': str(currentDateTime)
+                        }
 
-                    url = global_base_url + '/api/upload-image'
-                    payload = {
-                        'userId': str(profile[2]),
-                        'userName': str(profile[1]),
-                        'image': image_data,
-                        'date': str(currentDateTime)
-                    }
-
-                    headers = {'Content-Type': 'application/json'}
-                    data = json.dumps(payload)
-                    response = requests.post(url, headers=headers, data=data)
+                        url = global_base_url + '/api/upload-image'
+                        response = requests.post(url, data=data, files=files)
 
                     try:
                         print(response.status_code)
@@ -958,7 +1059,7 @@ clearButton.place(
 )
 
 button_image_6 = PhotoImage(
-    file=relative_to_assets("button_5.png"))
+    file=relative_to_assets("button_6.png"))
 maskMonitorButton = Button(
     image=button_image_6,
     borderwidth=0,
