@@ -18,6 +18,7 @@ import requests
 import base64
 import json
 import tempfile
+
 from urllib3.util.retry import Retry
 # from requests.packages.urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
@@ -432,86 +433,91 @@ def getProfile(id):
     conn.close()
     return profile
 #$$$$$$$$$$$$$
-def TakeImages():    
-    check_haarcascadefile()
-    harcascadePath = "haarcascade_frontalface_default.xml"
-    columns = ['SERIAL NO.', '', 'ID', '', 'NAME']
-    assure_path_exists("StudentDetails/")
-    assure_path_exists("TrainingImage/")    
-    parent_dir = "TrainingImage/"    
-    serial = 0   
-    Id = (txt.get()) 
-    name = (txt2.get())  
-    serial = Id
+# Function to create directories if they don't exist
+def assure_path_exists(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+# Constants
+CASCADE_PATH = "haarcascade_frontalface_default.xml"
+STUDENT_DETAILS_DIR = "StudentDetails"
+TRAINING_IMAGE_DIR = "TrainingImage"
+PASS_TRAIN_DIR = "Pass_Train"
+DATABASE_PATH = "facemaskattendance.db"  # Replace with your actual database path
+
+# Function to capture images
+def TakeImages():
+    assure_path_exists(STUDENT_DETAILS_DIR)
+    assure_path_exists(TRAINING_IMAGE_DIR)
+    
+    harcascadePath = CASCADE_PATH
+    Id = txt.get()
+    name = txt2.get()
     currentDateTime = datetime.datetime.now()
-    conn.execute("INSERT INTO users(name, userId, createdOn) VALUES(?,?,?)",(name ,Id ,currentDateTime))    
+    
+    # Insert user details into the database
+    with sqlite3.connect(DATABASE_PATH) as conn:
+        conn.execute("INSERT INTO users(name, userId, createdOn) VALUES(?,?,?)",
+                     (name, Id, currentDateTime))
+    
     cam = cv2.VideoCapture(0)
     faceCascade = cv2.CascadeClassifier(harcascadePath)
-    #detector = cv2.CascadeClassifier(harcascadePath)
     sampleNum = 0
-    t_end = 1
-    
-    while True:        
+
+    while True:
         ret, im = cam.read()
-        #detector = cv2.CascadeClassifier(harcascadePath)
-        gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)        
-        faces = faceCascade.detectMultiScale(gray, 1.2, 5)  
-        #print("here")    
-        #for (x, y, w, h) in faces:
-            #print(sampleNum)
-            #currentDateTime = datetime.datetime.now()
-        #cv2.rectangle(im, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        # incrementing sample number
-        sampleNum = sampleNum + 1
-        # saving the captured face in the dataset folder TrainingImage
-        cv2.imwrite("TrainingImage/" + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg",im)
-        # display the frame
-        cv2.imshow('Taking Images', im)                
-        img_name = os.path.join("TrainingImage/" + name + "." + str(serial) + "." + Id + '.' + str(sampleNum) + ".jpg")
-        storeImage = im = open(img_name, 'rb').read()                
-        conn.execute("INSERT INTO images(imgname, img, userId, createdOn) VALUES(?,?,?,?)",(img_name , sqlite3.Binary(storeImage),Id,currentDateTime))
-        print("{} written!".format(img_name))
-        conn.commit()
-        print(sampleNum)
-            # display the frame                
-        # wait for 100 miliseconds
+        gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        faces = faceCascade.detectMultiScale(gray, 1.2, 5)
+
+        for (x, y, w, h) in faces:
+            sampleNum += 1
+            img_name = os.path.join(TRAINING_IMAGE_DIR, f"{name}.{Id}.{Id}.{sampleNum}.jpg")
+            cv2.imwrite(img_name, im)
+
+            storeImage = open(img_name, 'rb').read()
+            conn.execute("INSERT INTO images(imgname, img, userId, createdOn) VALUES(?,?,?,?)",
+                         (img_name, sqlite3.Binary(storeImage), Id, currentDateTime))
+
+            print(f"{img_name} written!")
+
+        cv2.imshow('Taking Images', im)
+
         if cv2.waitKey(100) & 0xFF == ord('q'):
-            cam.release()
-            cv2.destroyAllWindows() 
-            break
-        # break if the sample number is morethan 100
-        elif sampleNum > 4:
             cam.release()
             cv2.destroyAllWindows()
             break
- 
 
+        if sampleNum > 15:
+            cam.release()
+            cv2.destroyAllWindows()
+            break
 
-
-
-
+# Function to train recognizer
 def TrainImages():
-    name = (txt2.get())
+    name = txt2.get()
     check_haarcascadefile()
-    assure_path_exists("Pass_Train/")
-    recognizer = cv2.face.LBPHFaceRecognizer_create()
-    harcascadePath = "haarcascade_frontalface_default.xml"
-    detector = cv2.CascadeClassifier(harcascadePath)
-    #faces, ID = getImagesAndLabels(os.path.join(parent_dir, name))
-    faces, ID = getImagesAndLabels("TrainingImage")
+    assure_path_exists(PASS_TRAIN_DIR)
+    
+    # recognizer = cv2.face.LBPHFaceRecognizer_create()
+    recognizer = cv2.face.LBPHFaceRecognizer_create(radius=1, neighbors=8, grid_x=8, grid_y=8)
+    harcascadePath = CASCADE_PATH
+    recognizer.setThreshold(50)
+    faces, ID = getImagesAndLabels(TRAINING_IMAGE_DIR)
+    
     try:
         recognizer.train(faces, np.array(ID))
     except:
         mess._show(title='No Registrations', message='Please Register someone first!!!')
         return
-    recognizer.save("Pass_Train/Trainner.yml")
-    res = "Profile Saved Successfully" 
-    print("Profile Saved")   
-    #Send the data to the Laravel endpoint
-    url = global_base_url+'api/uploadTrainnerYml'
+
+    # Save the trained model
+    recognizer.save(os.path.join(PASS_TRAIN_DIR, "Trainner.yml"))
+    print("Profile Saved Successfully")   
+
+    # Send the data to the Laravel endpoint
+    url = global_base_url + '/api/uploadTrainnerYml'
     
     # Read the content of the YAML file
-    with open('Pass_Train/Trainner.yml', 'r') as file:
+    with open(os.path.join(PASS_TRAIN_DIR, 'Trainner.yml'), 'r') as file:
         content = file.read()
 
     response = requests.post(url, data={'name': name, 'content': content})
@@ -520,10 +526,9 @@ def TrainImages():
         print('Profile Saved Successfully')
     else:
         print('Failed to save profile')
-############################################################################################3
-#$$$$$$$$$$$$$
 
-###########################################################################################
+    # Delete the training images
+    delete_training_images(TRAINING_IMAGE_DIR)
 
 def getImagesAndLabels(path):
     # get the path of all the files in the folder
@@ -532,7 +537,7 @@ def getImagesAndLabels(path):
     faces_samples = []
     # create empty ID list
     Ids = []
-    harcascadePath = "haarcascade_frontalface_default.xml"
+    harcascadePath = CASCADE_PATH
     detector = cv2.CascadeClassifier(harcascadePath)
     # now looping through all the image paths and loading the Ids and the images
     for image_path in imagePaths:
@@ -544,6 +549,7 @@ def getImagesAndLabels(path):
         try:
             # Extract the ID and remove leading/trailing spaces
             ID = int(os.path.split(image_path)[-1].split('.')[1].strip())
+            # Add the original image to the dataset
             faces_samples.append(imageNp)
             Ids.append(ID)
         except (ValueError, IndexError):
@@ -551,33 +557,17 @@ def getImagesAndLabels(path):
             print(f"Skipping invalid image path: {image_path}")
         cv2.waitKey(10)
     return faces_samples, Ids
-# def getImagesAndLabels(path):
-#     # get the path of all the files in the folder
-#     imagePaths = [os.path.join(path, f) for f in os.listdir(path)]
-#     # create empty face list
-#     faces_samples = []
-#     # create empty ID list
-#     Ids = []
-#     harcascadePath = "haarcascade_frontalface_default.xml"
-#     detector = cv2.CascadeClassifier(harcascadePath)
 
-#     # now looping through all the image paths and loading the Ids and the images
-#     for image_path in imagePaths:
-#         try:
-#             # loading the image and converting it to gray scale
-#             pilImage = Image.open(image_path).convert('L')
-#             # Now we are converting the PIL image into numpy array
-#             imageNp = np.array(pilImage, 'uint8')
-#             # In order to get id
-#             ID = int(os.path.splitext(os.path.basename(image_path))[0].split('.')[-1])
-#             faces_samples.append(imageNp)
-#             Ids.append(ID)
-#             # cv2.imshow("training", faceNp)
-#             cv2.waitKey(10)
-#         except (ValueError, OSError) as e:
-#             print(f"Error processing {image_path}: {e}")
+def delete_training_images(path):
+    for file_name in os.listdir(path):
+        file_path = os.path.join(path, file_name)
+        try:
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+        except Exception as e:
+            print(f"Failed to delete {file_path}: {e}")
 
-#     return faces_samples, Ids
+
 ################################################
 def maskMonitor():
     # Add the code for the "MASK MONITOR" functionality here
@@ -672,98 +662,82 @@ def TrackImages():
     assure_path_exists("Attendance/")
     assure_path_exists("StudentDetails/")
     assure_path_exists("AttendanceImages/")
-    currentDateTime = datetime.datetime.now()    
-    msg = ''
-    i = 0
-    j = 0
-    # Usage
-    trainner_content = fetch_trainner_yml_content()
-
-    if trainner_content:
-        update_local_trainner_yml(trainner_content)
-        print("Trainner.yml updated successfully.")
-    else:
-        print("Failed to fetch Trainner.yml content from the server.")
-    recognizer =cv2.face.LBPHFaceRecognizer_create() 
-    exists3 = os.path.isfile("Pass_Train/Trainner.yml")
-    if exists3:
-        recognizer.read("Pass_Train/Trainner.yml")
-        print ("Trainer Exists")
-    else:
+    
+    currentDateTime = datetime.datetime.now()
+    recognizer = cv2.face.LBPHFaceRecognizer_create() 
+    
+    # Check if the trainer file exists
+    trainer_path = "Pass_Train/Trainner.yml"
+    if not os.path.isfile(trainer_path):
         mess._show(title='Data Missing', message='Please click on Save Profile to reset data!!')
         return
+    
+    recognizer.read(trainer_path)
+    print("Trainer Exists")
+
     harcascadePath = "haarcascade_frontalface_default.xml"
     faceCascade = cv2.CascadeClassifier(harcascadePath)
     cam = cv2.VideoCapture(0)
     font = cv2.FONT_HERSHEY_SIMPLEX
-    col_names = ['Id', '', 'Name', '', 'Date', '', 'Time']
-    exists1 = os.path.isfile("StudentDetails/StudentDetails.csv")
-    if exists1:
-        df = pd.read_csv("StudentDetails/StudentDetails.csv")
-    else:
-        mess._show(title='Details Missing', message='Students details are missing, please check!')
-        cam.release()
-        cv2.destroyAllWindows()
-        window.destroy()
+
+    # Set a recognition confidence threshold
+    confidence_threshold = 500
+
     while True:
         ret, im = cam.read()
         gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
         faces = faceCascade.detectMultiScale(gray, 1.2, 5)
+
         for (x, y, w, h) in faces:
             cv2.rectangle(im, (x, y), (x + w, y + h), (255, 0, 0), 2)
-            serial, conf = recognizer.predict(gray[y:y + h, x:x + w])
-            print(serial)
-            profile=getProfile(serial)
-            print(profile)
-            if(profile!=None):
-                cv2.putText(im,"Name : "+str(profile[1]),(x,y+h+20),fontface, fontscale, fontcolor)
-                img_name = ("AttendanceImages/ " + str(profile[1]) + "." + str(profile[2]) + "." + str(currentDateTime) + ".jpg")                    
-                cv2.imwrite("AttendanceImages/ " + str(profile[1]) + "." + str(profile[2]) + "." + str(currentDateTime) + ".jpg",
-                            gray[y:y + h, x:x + w])
-                storeImage = im = open(img_name, 'rb').read()
-                with open(img_name, 'rb') as f:
-                    image_data = base64.b64encode(f.read()).decode('utf-8')
-                #try:
-                url = 'http://httpbin.org/get'
-                
-                b = bytearray(storeImage)
-                im_b64 = base64.b64encode(storeImage).decode("utf8")
-                d = json.dumps(im_b64)
-                session = requests.Session()
-                retry = Retry(connect=3, backoff_factor=0.5)
-                adapter = HTTPAdapter(max_retries=retry)
-                session.mount('http://', adapter)
-                session.mount('https://', adapter)
+            serial, confidence = recognizer.predict(gray[y:y + h, x:x + w])
+            print(f"Serial: {serial}, Confidence: {confidence}")
 
-                API_ENDPOINT = global_base_url+'/api/upload-image'
-                payload ={
-                    'userId' : (str(profile[2])),
-                    'userName': (str(profile[1])),
-                    'image' : image_data,
-                    'date' : (str(currentDateTime))                    
-                }
-                print((str(profile[2])))
-                headers = {'Content-Type': 'application/json'}
-                data = json.dumps(payload)
-                response = requests.post(API_ENDPOINT,headers=headers,data = data)
-                try:
-                    print(response.status_code)
-                    #print(response.json())
-                except:
-                    print("I crashed")
-                conn.execute("INSERT INTO attendance(userId, img,createdOn) VALUES(?,?,?)",(str(profile[2]) , sqlite3.Binary(storeImage) ,currentDateTime))
-                print("{} written!".format(img_name))
-                conn.commit()                
-                cam.release()
-                cv2.destroyAllWindows()
-                maskdetection()
-                break                
+            if confidence > confidence_threshold:
+                profile = getProfile(serial)
+
+                if profile is not None:
+                    cv2.putText(im, f"Name: {profile[1]}", (x, y + h + 20), fontface, fontscale, fontcolor)
+                    img_name = f"AttendanceImages/{profile[1]}.{profile[2]}.{currentDateTime}.jpg"
+                    cv2.imwrite(img_name, gray[y:y + h, x:x + w])
+
+                    with open(img_name, 'rb') as f:
+                        image_data = base64.b64encode(f.read()).decode('utf-8')
+
+                    url = global_base_url + '/api/upload-image'
+                    payload = {
+                        'userId': str(profile[2]),
+                        'userName': str(profile[1]),
+                        'image': image_data,
+                        'date': str(currentDateTime)
+                    }
+
+                    headers = {'Content-Type': 'application/json'}
+                    data = json.dumps(payload)
+                    response = requests.post(url, headers=headers, data=data)
+
+                    try:
+                        print(response.status_code)
+                    except:
+                        print("Request failed")
+
+                    conn.execute("INSERT INTO attendance(userId, img,createdOn) VALUES(?,?,?)",
+                                 (str(profile[2]), sqlite3.Binary(open(img_name, 'rb').read()), currentDateTime))
+                    print(f"{img_name} written!")
+
+                    cam.release()
+                    cv2.destroyAllWindows()
+                    maskdetection()
+                    break
+                else:
+                    cv2.putText(im, "Name: Unknown", (x, y + h + 20), fontface, fontscale, fontcolor)
             else:
-                cv2.putText(im,"Name : Unknown",(x,y+h+20),fontface, fontscale, fontcolor)                
+                cv2.putText(im, "Name: Unknown (Low Confidence)", (x, y + h + 20), fontface, fontscale, fontcolor)
+
         cv2.imshow('Taking Attendance', im)
         if (cv2.waitKey(1) == ord('q')):
-            break                    
-    #csvFile1.close()
+            break
+
     cam.release()
     cv2.destroyAllWindows()
 #Front End===========================================================
